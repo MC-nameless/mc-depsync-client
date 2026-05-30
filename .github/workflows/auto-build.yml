@@ -1,0 +1,64 @@
+name: Client Continuous Build
+
+on:
+  push:
+    branches:
+      - '**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Client for ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: ''
+            cc: gcc
+            ldflags: '-s -w'
+          - goos: windows
+            goarch: amd64
+            ext: '.exe'
+            cc: x86_64-w64-mingw32-gcc
+            ldflags: '-s -w -H=windowsgui'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.1'
+
+      - name: Install System Dependencies for Fyne & Cross-Compilation
+        run: |
+          sudo apt-get update 
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev gcc-mingw-w64 upx-ucl
+
+      - name: Build Fyne GUI Binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1 
+          CC: ${ matrix.cc }}
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          BINARY_NAME=mc-depsync-client-${{ matrix.goos }}-${{ matrix.goarch }}-${SHORT_SHA}${{ matrix.ext }}
+          
+          # 执行编译
+          go build -ldflags="${{ matrix.ldflags }}" -o $BINARY_NAME .
+          echo "BINARY_NAME=$BINARY_NAME" >> $GITHUB_ENV
+
+      - name: Compress with UPX
+        run: upx --best --lzma ${{ env.BINARY_NAME }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}
+          path: ${{ env.BINARY_NAME }}
+          retention-days: 7
