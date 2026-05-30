@@ -108,7 +108,7 @@ func main() {
 	})
 
 	title := widget.NewLabelWithStyle("MC-Depsync 模组同步器", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-	
+
 	content := container.NewVBox(
 		title,
 		widget.NewLabel("请输入服主提供的配置信息："),
@@ -166,7 +166,6 @@ func runSyncProcess(cfg Config, status *widget.Label, progress *widget.ProgressB
 	dialog.ShowInformation("恭喜", "整合包已同步至服务器最新状态！", w)
 }
 
-
 func reconcile(remote Manifest, ledger LocalLedger, localMap map[string]string) ([]FileEntry, map[string]string, []string) {
 	var toDownload []FileEntry
 	toRename := make(map[string]string)
@@ -206,7 +205,9 @@ func scanLocalModsFast(modsDir string) map[string]string {
 			defer wg.Done()
 			for path := range filesToHash {
 				f, err := os.Open(path)
-				if err != nil { continue }
+				if err != nil {
+					continue
+				}
 				h := sha256.New()
 				buf := make([]byte, 64*1024)
 				io.CopyBuffer(h, f, buf)
@@ -264,7 +265,7 @@ func executeDownloadsWithProgress(cfg Config, toDownload []FileEntry, status *wi
 		go func() {
 			defer wg.Done()
 			for file := range downloadChan {
-				url := fmt.Sprintf("%s/download/%s/%s", cfg.ServerURL, cfg.ModpackID, file.Path)
+				url := fmt.Sprintf("%s/download/cunz/%s", cfg.ServerURL, file.SHA256)
 				targetPath := filepath.Join(filepath.Dir(cfg.ModsDir), file.Path)
 				os.MkdirAll(filepath.Dir(targetPath), 0755)
 
@@ -292,10 +293,14 @@ func fetchRemoteManifest(cfg Config) (Manifest, error) {
 	url := fmt.Sprintf("%s/api/modpacks/%s/manifest/latest", cfg.ServerURL, cfg.ModpackID)
 	client := http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get(url)
-	if err != nil { return m, err }
+	if err != nil {
+		return m, err
+	}
 	defer resp.Body.Close()
-	
-	if resp.StatusCode != 200 { return m, fmt.Errorf("状态码 %d", resp.StatusCode) }
+
+	if resp.StatusCode != 200 {
+		return m, fmt.Errorf("状态码 %d", resp.StatusCode)
+	}
 	json.NewDecoder(resp.Body).Decode(&m)
 	return m, nil
 }
@@ -320,7 +325,9 @@ func saveConfig(cfg Config) {
 func loadLocalLedger() LocalLedger {
 	var ledger LocalLedger
 	data, err := os.ReadFile(LedgerFile)
-	if err == nil { json.Unmarshal(data, &ledger) }
+	if err == nil {
+		json.Unmarshal(data, &ledger)
+	}
 	return ledger
 }
 
