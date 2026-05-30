@@ -1,0 +1,120 @@
+name: Client Build and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build Client for ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: ''
+            cc: gcc
+            ldflags: '-s -w'
+          - goos: windows
+            goarch: amd64
+            ext: '.exe'
+            cc: x86_64-w64-mingw32-gcc
+            ldflags: '-s -w -H=windowsgui'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.1'
+
+      - name: Install System Dependencies for Fyne
+        run: |
+          sudo apt-get update 
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev gcc-mingw-w64 upx-ucl
+
+      - name: Build Fyne GUI Binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1 
+          CC: ${{ matrix.cc }}
+        run: |
+          BINARY_NAME=mc-depsync-client-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          go build -ldflags="${{ matrix.ldflags }}" -o $BINARY_NAME .
+          echo "BINARY_NAME=$BINARY_NAME" >> $GITHUB_ENV
+
+      - name: Compress with UPX
+        run: upx --best --lzma ${{ env.BINARY_NAME }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BINARY_NAME }}
+          path: ${{ env.BINARY_NAME }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write 
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+          
+      - name: Generate SHA256 Checksums
+        run: |
+          cd artifacts
+          sha256sum * > sha256sums.txt
+          
+          echo "" > ../checksums.md
+          echo "\`\`\`text" >> ../checksums.md
+          cat sha256sums.txt >> ../checksums.md
+          echo "\`\`\`" >> ../checksums.md
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Generate changelog and Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REF: refs/tags/${{ github.event.inputs.version }}
+          GITHUB_REF_NAME: ${{ github.event.inputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f ${{ github.event.inputs.version }}
+          git push -f origin ${{ github.event.inputs.version }}
+          npx changelogithub
+
+      - name: Upload Assets and Append Checksums
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view ${{ github.event.inputs.version }} --json body -q .body > current_notes.md
+          
+          echo "" >> current_notes.md
+          cat checksums.md >> current_notes.md
+          
+          gh release edit ${{ github.event.inputs.version }} -F current_notes.md
+          
+          cd artifacts
+          gh release upload ${{ github.event.inputs.version }} *
