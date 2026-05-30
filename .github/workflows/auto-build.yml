@@ -44,7 +44,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 1 
-          CC: ${ matrix.cc }}
+          CC: ${{ matrix.cc }}
         run: |
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
           BINARY_NAME=mc-depsync-client-${{ matrix.goos }}-${{ matrix.goarch }}-${SHORT_SHA}${{ matrix.ext }}
