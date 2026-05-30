@@ -307,7 +307,7 @@ func fetchRemoteManifest(cfg Config) (Manifest, error) {
 
 func loadConfig() Config {
 	var cfg Config
-	cfg.ServerURL = "http://localhost:8080"
+	cfg.ServerURL = "https://mcdepsync.api.shinku.xin"
 	cfg.ModsDir = "./mods"
 
 	data, err := os.ReadFile(ConfigFile)
