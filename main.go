@@ -136,23 +136,23 @@ func runSyncProcess(cfg Config, status *widget.Label, progress *widget.ProgressB
 		return
 	}
 
-	if ledger.LastSyncVersion == remoteManifest.Version {
-		status.SetText(fmt.Sprintf("状态: 已是最新版 (v%d)，无需同步！", remoteManifest.Version))
-		progress.SetValue(1.0)
-		dialog.ShowInformation("提示", "您的模组已经是最新状态，可以启动游戏！", w)
-		return
-	}
-
-	status.SetText("状态: 正在扫描本地 mods 目录...")
+	status.SetText("状态: 正在校验本地文件完整性...")
 	localMap := scanLocalModsFast(cfg.ModsDir)
 
 	status.SetText("状态: 正在进行三方差量比对...")
 	toDownload, toRename, toDelete := reconcile(remoteManifest, ledger, localMap)
 
+	if ledger.LastSyncVersion == remoteManifest.Version && len(toDownload) == 0 && len(toRename) == 0 && len(toDelete) == 0 {
+		status.SetText(fmt.Sprintf("状态: 已是最新版 (v%d)，完整性校验通过！", remoteManifest.Version))
+		progress.SetValue(1.0)
+		dialog.ShowInformation("提示", "您的模组已经是最新且完整的官方状态, 可以启动游戏！", w)
+		return
+	}
+
 	executeLocalFileOps(cfg.ModsDir, toRename, toDelete)
 
 	if len(toDownload) > 0 {
-		status.SetText(fmt.Sprintf("状态: 发现版本变动，开始下载 %d 个模组...", len(toDownload)))
+		status.SetText(fmt.Sprintf("状态: 发现文件变动或缺失, 开始下载 %d 个模组...", len(toDownload)))
 		executeDownloadsWithProgress(cfg, toDownload, status, progress)
 	} else {
 		progress.SetValue(1.0)
@@ -163,7 +163,7 @@ func runSyncProcess(cfg Config, status *widget.Label, progress *widget.ProgressB
 	saveLocalLedger(ledger)
 
 	status.SetText(fmt.Sprintf("状态: 同步成功！当前版本: v%d", remoteManifest.Version))
-	dialog.ShowInformation("恭喜", "整合包已同步至服务器最新状态！", w)
+	dialog.ShowInformation("恭喜", "整合包已同步并修复至服务器最新状态！", w)
 }
 
 func reconcile(remote Manifest, ledger LocalLedger, localMap map[string]string) ([]FileEntry, map[string]string, []string) {
